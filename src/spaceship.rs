@@ -10,15 +10,21 @@ const SPACESHIP_SPEED: f32 = 25.0;
 const SPACESHIP_ROTATION_SPEED: f32 = 2.5;
 const SPACESHIP_ROLL_SPEED: f32 = 2.5;
 
+const MISSILE_SPEED: f32 = 50.0;
+const MISSILE_FORWARD_SPAWN_SCALAR: f32 = 7.5;
+
 #[derive(Component, Debug)]
 pub struct Spaceship;
+
+#[derive(Component, Debug)]
+pub struct SpaceshipMissile;
 
 pub struct SpaceshipPlugin;
 
 impl Plugin for SpaceshipPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PostStartup, spawn_spaceship)
-            .add_systems(Update, spaceship_movement_controls);
+            .add_systems(Update, (spaceship_movement_controls, spaceship_weapon_controls));
     }
 }
 
@@ -44,11 +50,49 @@ fn spaceship_movement_controls(
     let mut roll = 0.0;
     let mut movement = 0.0;
 
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        rotation = -SPACESHIP_ROTATION_SPEED * time.delta_secs();
+    } else if keyboard_input.pressed(KeyCode::KeyA) {
+        rotation = SPACESHIP_ROTATION_SPEED * time.delta_secs();
+    }
+
     if keyboard_input.pressed(KeyCode::KeyS) {
         movement = -SPACESHIP_SPEED;
     } else if keyboard_input.pressed(KeyCode::KeyW) {
         movement = SPACESHIP_SPEED;
     }
 
+    // cosmetic roll
+    if keyboard_input.pressed(KeyCode::ShiftLeft) {
+        roll = -SPACESHIP_ROLL_SPEED * time.delta_secs();
+    } else if keyboard_input.pressed(KeyCode::ControlLeft) {
+        roll = SPACESHIP_ROLL_SPEED * time.delta_secs();
+    }
+
+    transform.rotate_y(rotation);
+
+    transform.rotate_local_z(roll);
+
     velocity.value = -transform.forward() * movement;
+}
+
+fn spaceship_weapon_controls(
+    mut commands: Commands,
+    query: Query<&Transform, With<Spaceship>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    scene_assets: Res<SceneAssets>,
+) {
+    let transform = query.single();
+
+    if keyboard_input.pressed(KeyCode::Space) {
+        commands.spawn((
+            MovingObjectBundle {
+                velocity: Velocity::new(-transform.forward() * MISSILE_SPEED),
+                acceleration: Acceleration::new(Vec3::ZERO),
+                transform: Transform::from_translation(transform.translation + -transform.forward() * MISSILE_FORWARD_SPAWN_SCALAR),
+                model: SceneRoot(scene_assets.missile.clone()),
+            },
+            SpaceshipMissile,
+        ));
+    }
 }
